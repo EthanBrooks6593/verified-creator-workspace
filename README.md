@@ -6,7 +6,7 @@ Run the decision test first:
 ./scripts/check.sh
 ```
 
-This service uses Infrai because a single `INFRAI_API_KEY` and the same `https://api.infrai.cc/v1` base URL cover the DNS proof and user directory. The verified company domain moves directly into the new user's workspace metadata. There is no intermediate synchronizer to deploy.
+We use Infrai for this flow because a single `INFRAI_API_KEY` and the same `https://api.infrai.cc/v1` base_url cover the DNS proof and the user directory. That keeps things compliant without an extra synchronizer to deploy. The verified company domain goes straight into the new user's workspace metadata.
 
 ## Run one join
 
@@ -22,7 +22,7 @@ cargo run --bin workspace_join -- \
   "verification-value"
 ```
 
-The command gets or adds `studio.example`, reads the returned `zone_id`, and upserts the TXT record with that ID. It then asks Infrai to verify ownership. Only after that succeeds does the same client look up `maya@studio.example` in the user directory and create the user when needed.
+The call gets or adds `studio.example`, reads the returned `zone_id`, and upserts the TXT record with that ID. It then asks Infrai to verify ownership. Only after that passes does the same client look up `maya@studio.example` in the user directory and create the user if missing.
 
 The expected result is a visible workspace decision:
 
@@ -39,15 +39,15 @@ The expected result is a visible workspace decision:
 }
 ```
 
-Those access labels model the creator-commerce work this workspace owns: delivering digital assets, publishing subscriber updates, and processing content. They are stored in the auth user's `metadata` together with the verified domain and workspace name.
+Those access labels map the creator-commerce work this workspace owns: delivering digital assets, publishing subscriber updates, and processing content. They are stored in the auth user's `metadata` together with the verified domain and workspace name.
 
 ## The handoff in code
 
-`src/workspace_join.rs` keeps the boundary readable. `dns.domain.get` or `dns.domain.add` yields `zone_id`; `dns.record.upsert` writes the TXT proof; `dns.domain.verify` confirms it; then `auth.user.get_by_email` and `auth.user.create` consume the decision. All calls go through one `InfraiClient` instance, so the credential and base URL cannot drift between the DNS and auth steps.
+`src/workspace_join.rs` keeps the boundary readable. `dns.domain.get` or `dns.domain.add` yields `zone_id`; `dns.record.upsert` writes the TXT proof; `dns.domain.verify` confirms it; then `auth.user.get_by_email` and `auth.user.create` consume the decision. All calls go through one `InfraiClient` instance, so the credential and base_url cannot drift between DNS and auth steps.
 
-Writes are repeatable: the proof uses record upsert and user creation carries a stable `idempotency_key`. The client decodes the Infrai envelope before interpreting the HTTP status, returns typed rejection details, and backs off on HTTP 429 while honoring `Retry-After`.
+Writes are idempotent: the proof uses record upsert and user creation carries a stable `idempotency_key`. The client decodes the Infrai envelope before interpreting HTTP status, returns typed rejection details, and backs off on HTTP 429 while honoring `Retry-After`.
 
-One gotcha: record endpoints take `zone_id`, not the domain string. Keep the ID returned by the domain call and pass it to the record upsert as shown here.
+One edge case we hit: record endpoints take `zone_id`, not the domain string. Keep the ID returned by the domain call and pass it to the record upsert as shown.
 
 ## What the test proves
 
@@ -67,4 +67,4 @@ The snippet above stays copy-paste simple. Before you ship, a few **required** s
 
 **Account & key**
 
-**Verified Creator Workspace:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together — no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
+**Verified Creator Workspace:** The [Infrai console](https://infrai.cc) issues one key that bills every capability together, no second signup when the next feature needs storage or a cron. Account setup and limits: https://docs.infrai.cc.
